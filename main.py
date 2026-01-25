@@ -1,144 +1,159 @@
-import discord
-from discord.ext import commands
-from flask import Flask
-from threading import Thread
 import os
 import sys
 import asyncio
 from datetime import datetime
+from threading import Thread
 
-print("🚀 Iniciando bot de cargo automático...")
-print(f"Python version: {sys.version}")
+print("=" * 60)
+print("🚀 INICIANDO BOT DE CARGO AUTOMÁTICO")
+print(f"Python: {sys.version}")
+print("=" * 60)
 
-# ==================== CONFIGURAÇÃO ====================
+# ==================== CONFIGURAÇÃO DO BOT ====================
 
-# Configurar intents
+# IMPORTANTE: Importar discord.py de forma segura
+try:
+    # Tentar importar sem funcionalidades de voz
+    import discord
+    
+    # Forçar desabilitar voz para evitar audioop
+    discord.voice_client = None
+    discord.VoiceClient = None
+    
+    from discord.ext import commands
+    
+    print("✅ discord.py importado com sucesso")
+    
+except ImportError as e:
+    print(f"❌ Erro ao importar discord.py: {e}")
+    print("💡 Instale com: pip install discord.py==2.2.3")
+    sys.exit(1)
+
+except Exception as e:
+    print(f"⚠️ Aviso: {e}")
+    # Continuar mesmo com avisos
+
+# Configurar intents (sem voz)
 intents = discord.Intents.default()
-intents.members = True
-intents.message_content = True
-intents.guilds = True
+intents.members = True      # Para on_member_join
+intents.guilds = True       # Para ver servidores
 
-# Criar bot
-bot = commands.Bot(
+# Criar bot com funcionalidades limitadas
+class SimpleBot(commands.Bot):
+    async def setup_hook(self):
+        # Desabilitar funcionalidades de voz
+        self._connection._voice_clients = {}
+        print("🔇 Funcionalidades de voz desabilitadas")
+
+bot = SimpleBot(
     command_prefix='!',
     intents=intents,
     help_command=None
 )
 
-# ==================== SERVIDOR WEB PARA KEEP-ALIVE ====================
-app = Flask('')
+# ==================== SERVIDOR WEB ====================
 
-@app.route('/')
-def home():
-    return """
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <title>🤖 Bot de Cargo Automático</title>
-        <meta name="viewport" content="width=device-width, initial-scale=1">
+try:
+    from flask import Flask
+    app = Flask(__name__)
+    
+    @app.route('/')
+    def home():
+        return f"""
+        <!DOCTYPE html>
+        <html>
+        <head><title>🤖 Bot Online</title>
         <style>
-            body {
-                font-family: 'Arial', sans-serif;
-                text-align: center;
-                padding: 20px;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                color: white;
-                min-height: 100vh;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-            }
-            .container {
-                background: rgba(0,0,0,0.8);
-                padding: 30px;
-                border-radius: 15px;
-                max-width: 600px;
-                width: 90%;
-                box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-            }
-            .status {
-                font-size: 24px;
-                margin: 20px 0;
-                padding: 15px;
-                border-radius: 10px;
-                background: #28a745;
-                animation: pulse 2s infinite;
-            }
-            @keyframes pulse {
-                0% { transform: scale(1); }
-                50% { transform: scale(1.05); }
-                100% { transform: scale(1); }
-            }
-            .info {
-                background: rgba(255,255,255,0.1);
-                padding: 15px;
-                border-radius: 10px;
-                margin: 15px 0;
-            }
+            body {{font-family: Arial; text-align: center; padding: 50px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;}}
+            .container {{background: rgba(0,0,0,0.7); padding: 30px; border-radius: 15px;
+            max-width: 600px; margin: 0 auto;}}
+            .status {{background: #28a745; padding: 15px; border-radius: 10px; margin: 20px 0;}}
         </style>
-    </head>
-    <body>
-        <div class="container">
-            <h1>🤖 Bot de Cargo Automático</h1>
-            <div class="status">🟢 ONLINE 24/7</div>
-            <div class="info">
-                <p><strong>Função:</strong> Atribuir cargo <strong>𝗩𝗶𝘀𝗶𝘁𝗮𝗻𝘁𝗲</strong> automaticamente</p>
-                <p><strong>Servidores:</strong> {}</p>
-                <p><strong>Última verificação:</strong> {}</p>
+        </head>
+        <body>
+            <div class="container">
+                <h1>🤖 Bot de Cargo Automático</h1>
+                <div class="status">🟢 ONLINE</div>
+                <p>Atribui cargo <strong>𝗩𝗶𝘀𝗶𝘁𝗮𝗻𝘁𝗲</strong> automaticamente</p>
+                <p><strong>Servidores:</strong> {len(bot.guilds) if hasattr(bot, 'guilds') else 0}</p>
+                <p><strong>Última verificação:</strong> {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}</p>
             </div>
-            <p>Este bot está hospedado no Render.com e monitorado por UptimeRobot</p>
-            <p><small>ID: {}</small></p>
-        </div>
-    </body>
-    </html>
-    """.format(len(bot.guilds), 
-               datetime.now().strftime('%d/%m/%Y %H:%M:%S'),
-               bot.user.id if bot.user else 'Carregando...')
+        </body>
+        </html>
+        """
+    
+    @app.route('/health')
+    def health():
+        return {"status": "online", "timestamp": datetime.now().isoformat()}, 200
+    
+    @app.route('/ping')
+    def ping():
+        return "pong", 200
+    
+    def run_flask():
+        app.run(host='0.0.0.0', port=8080, debug=False, threaded=True)
+    
+    print("✅ Flask importado com sucesso")
+    
+except ImportError:
+    print("⚠️ Flask não instalado, continuando sem servidor web...")
+    
+    # Criar um servidor web simples como fallback
+    from http.server import HTTPServer, BaseHTTPRequestHandler
+    
+    class SimpleHandler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            if self.path == '/health':
+                self.send_response(200)
+                self.send_header('Content-type', 'application/json')
+                self.end_headers()
+                self.wfile.write(b'{"status":"online"}')
+            else:
+                self.send_response(200)
+                self.send_header('Content-type', 'text/html')
+                self.end_headers()
+                html = f"""
+                <html><body>
+                <h1>🤖 Bot Online</h1>
+                <p>Status: Online</p>
+                <p>Time: {datetime.now()}</p>
+                </body></html>
+                """
+                self.wfile.write(html.encode())
+    
+    def run_simple_server():
+        server = HTTPServer(('0.0.0.0', 8080), SimpleHandler)
+        server.serve_forever()
+    
+    run_flask = run_simple_server
 
-@app.route('/health')
-def health():
-    return {"status": "online", "timestamp": datetime.now().isoformat()}, 200
-
-@app.route('/ping')
-def ping():
-    return "pong", 200
-
-def run_web_server():
-    app.run(host='0.0.0.0', port=8080)
-
-def start_keep_alive():
+# Iniciar servidor web em thread separada
+def start_web_server():
     print("🌐 Iniciando servidor web na porta 8080...")
-    t = Thread(target=run_web_server, daemon=True)
-    t.start()
-    print("✅ Servidor web pronto!")
-    print("📡 URLs disponíveis:")
-    print("   • Status: http://localhost:8080/")
-    print("   • Health check: http://localhost:8080/health")
-    print("   • Ping: http://localhost:8080/ping")
+    try:
+        web_thread = Thread(target=run_flask, daemon=True)
+        web_thread.start()
+        print("✅ Servidor web iniciado!")
+    except Exception as e:
+        print(f"⚠️ Erro ao iniciar servidor web: {e}")
 
 # ==================== EVENTOS DO BOT ====================
 
 @bot.event
 async def on_ready():
-    """Quando o bot está pronto"""
     print("=" * 60)
-    print(f"🤖 BOT CONECTADO COM SUCESSO!")
-    print(f"🏷️ Nome: {bot.user}")
+    print(f"✅ BOT CONECTADO: {bot.user}")
     print(f"🆔 ID: {bot.user.id}")
     print(f"📡 Ping: {round(bot.latency * 1000)}ms")
     print(f"🏠 Servidores: {len(bot.guilds)}")
-    print("=" * 60)
     
-    # Listar servidores
     if bot.guilds:
         print("📋 Servidores conectados:")
         for guild in bot.guilds:
-            print(f"   • {guild.name} (ID: {guild.id}) - {guild.member_count} membros")
-    else:
-        print("⚠️ Bot não está em nenhum servidor ainda!")
-        print("💡 Adicione o bot usando o link de convite")
+            print(f"   • {guild.name} ({guild.member_count} membros)")
     
-    # Status personalizado
+    # Status simples
     await bot.change_presence(
         activity=discord.Activity(
             type=discord.ActivityType.watching,
@@ -146,176 +161,129 @@ async def on_ready():
         )
     )
     
-    print("✅ Bot pronto para receber novos membros!")
+    print("🎯 Bot pronto para atribuir cargos automaticamente!")
     print("=" * 60)
 
 @bot.event
-async def on_member_join(member: discord.Member):
-    """Atribui cargo automático quando alguém entra"""
+async def on_member_join(member):
+    """Atribui cargo automaticamente"""
     print(f"\n{'='*50}")
-    print(f"👤 NOVO MEMBRO DETECTADO!")
-    print(f"   Nome: {member.name}")
-    print(f"   ID: {member.id}")
-    print(f"   Servidor: {member.guild.name}")
-    print(f"   Data: {datetime.now().strftime('%d/%m/%Y %H:%M:%S')}")
+    print(f"👤 NOVO MEMBRO: {member.name}")
+    print(f"🏠 Servidor: {member.guild.name}")
     
     try:
         # Buscar cargo
-        visitante_role = discord.utils.get(member.guild.roles, name="𝗩𝗶𝘀𝗶𝘁𝗮𝗻𝘁𝗲")
+        cargo_nome = "𝗩𝗶𝘀𝗶𝘁𝗮𝗻𝘁𝗲"
+        visitante = discord.utils.get(member.guild.roles, name=cargo_nome)
         
-        if not visitante_role:
-            print("   ⚠️ Cargo '𝗩𝗶𝘀𝗶𝘁𝗮𝗻𝘁𝗲' não encontrado. Tentando criar...")
-            
+        # Criar cargo se não existir
+        if not visitante:
             try:
-                visitante_role = await member.guild.create_role(
-                    name="𝗩𝗶𝘀𝗶𝘁𝗮𝗻𝘁𝗲",
+                visitante = await member.guild.create_role(
+                    name=cargo_nome,
                     color=discord.Color.light_grey(),
-                    reason="Criado automaticamente pelo bot",
-                    permissions=discord.Permissions.none()
+                    reason="Criado automaticamente"
                 )
-                print(f"   ✅ Cargo criado com sucesso!")
+                print(f"✅ Cargo '{cargo_nome}' criado")
             except Exception as e:
-                print(f"   ❌ Erro ao criar cargo: {e}")
+                print(f"❌ Não foi possível criar cargo: {e}")
                 return
-                
+        
         # Verificar permissões
-        bot_member = member.guild.me
-        if not bot_member.guild_permissions.manage_roles:
-            print("   ❌ Bot não tem permissão para gerenciar cargos!")
+        if not member.guild.me.guild_permissions.manage_roles:
+            print("❌ Bot não tem permissão para gerenciar cargos")
             return
         
         # Atribuir cargo
-        await member.add_roles(visitante_role)
-        print(f"   ✅ Cargo atribuído com sucesso!")
-        print(f"   📊 Total de membros: {member.guild.member_count}")
+        await member.add_roles(visitante)
+        print(f"✅ Cargo atribuído a {member.name}")
         
-        # Tentar enviar mensagem de boas-vindas
-        try:
-            canal_entrada = discord.utils.get(member.guild.text_channels, name="entrada")
-            if not canal_entrada:
-                canal_entrada = discord.utils.get(member.guild.text_channels, name="geral")
-            
-            if canal_entrada and canal_entrada.permissions_for(bot_member).send_messages:
-                embed = discord.Embed(
-                    title=f"👋 Bem-vindo(a), {member.name}!",
-                    description=f"Seja bem-vindo(a) ao **{member.guild.name}**!\nVocê recebeu o cargo {visitante_role.mention}",
-                    color=discord.Color.green()
-                )
-                await canal_entrada.send(embed=embed)
-                print(f"   💬 Mensagem enviada em #{canal_entrada.name}")
-        except:
-            pass  # Ignorar erro se não conseguir enviar mensagem
-            
+        # Log
+        print(f"📊 Total de membros: {member.guild.member_count}")
+        
     except Exception as e:
-        print(f"   ❌ Erro: {type(e).__name__}: {e}")
+        print(f"❌ Erro: {type(e).__name__}: {e}")
     
     print(f"{'='*50}")
 
 # ==================== COMANDOS SIMPLES ====================
 
-@bot.command(name="ping")
-async def ping_cmd(ctx):
-    """Verifica se o bot está online"""
+@bot.command()
+async def ping(ctx):
+    """Testa se o bot está online"""
     latency = round(bot.latency * 1000)
-    
-    embed = discord.Embed(
-        title="🏓 Pong!",
-        description=f"Latência: **{latency}ms**",
-        color=discord.Color.green()
-    )
-    embed.add_field(name="Servidores", value=len(bot.guilds), inline=True)
-    embed.add_field(name="Membros totais", value=sum(g.member_count for g in bot.guilds), inline=True)
-    embed.set_footer(text="Bot de Cargo Automático • Online 24/7")
-    
-    await ctx.send(embed=embed)
+    await ctx.send(f"🏓 Pong! {latency}ms | Servidores: {len(bot.guilds)}")
 
-@bot.command(name="status")
-async def status_cmd(ctx):
+@bot.command()
+async def status(ctx):
     """Status do bot"""
+    import platform
+    
     embed = discord.Embed(
         title="🤖 Status do Bot",
-        description="Bot de Cargo Automático 24/7",
         color=discord.Color.blue()
     )
     
     embed.add_field(name="Nome", value=bot.user.name, inline=True)
-    embed.add_field(name="ID", value=bot.user.id, inline=True)
     embed.add_field(name="Ping", value=f"{round(bot.latency * 1000)}ms", inline=True)
     embed.add_field(name="Servidores", value=len(bot.guilds), inline=True)
-    embed.add_field(name="Online desde", value=bot.user.created_at.strftime('%d/%m/%Y'), inline=True)
     
-    # Permissões
-    perms = ctx.guild.me.guild_permissions
-    perms_text = "✅ Gerenciar Cargos" if perms.manage_roles else "❌ Gerenciar Cargos"
-    embed.add_field(name="Permissões", value=perms_text, inline=False)
+    # Memória (aproximada)
+    import psutil
+    memory = psutil.virtual_memory()
+    embed.add_field(name="Memória", value=f"{memory.percent}% usado", inline=True)
     
-    embed.set_footer(text="Hospedado no Render.com • Monitorado por UptimeRobot")
+    # Sistema
+    embed.add_field(name="Python", value=platform.python_version(), inline=True)
+    embed.add_field(name="Sistema", value=platform.system(), inline=True)
+    
+    embed.set_footer(text="Bot de Cargo Automático • Online 24/7")
     
     await ctx.send(embed=embed)
 
-@bot.command(name="help")
-async def help_cmd(ctx):
-    """Ajuda"""
-    embed = discord.Embed(
-        title="📚 Ajuda - Bot de Cargo Automático",
-        description="Este bot atribui automaticamente o cargo **'𝗩𝗶𝘀𝗶𝘁𝗮𝗻𝘁𝗲'** a novos membros.",
-        color=discord.Color.purple()
-    )
+@bot.command()
+@commands.has_permissions(administrator=True)
+async def test(ctx, user: discord.Member = None):
+    """Testa o sistema de cargos (apenas ADM)"""
+    if not user:
+        user = ctx.author
     
-    embed.add_field(name="🎯 Funcionalidade", 
-                   value="• Atribui cargo automaticamente\n• Cria cargo se não existir\n• Envia mensagem de boas-vindas", 
-                   inline=False)
+    await ctx.send(f"🔧 Testando sistema para {user.mention}...")
     
-    embed.add_field(name="📋 Comandos", 
-                   value="• `!ping` - Verifica latência\n• `!status` - Status do bot\n• `!help` - Esta mensagem", 
-                   inline=False)
+    # Simular entrada
+    await on_member_join(user)
     
-    embed.add_field(name="⚙️ Configuração", 
-                   value="1. Adicione o bot ao servidor\n2. Garanta que ele tenha permissão para 'Gerenciar Cargos'\n3. O cargo do bot deve estar acima do cargo '𝗩𝗶𝘀𝗶𝘁𝗮𝗻𝘁𝗲'", 
-                   inline=False)
-    
-    embed.set_footer(text="Online 24/7 • Sistema automático")
-    
-    await ctx.send(embed=embed)
+    await ctx.send(f"✅ Teste concluído para {user.mention}!")
 
 # ==================== INICIALIZAÇÃO ====================
 
 if __name__ == '__main__':
-    print("=" * 60)
-    print("🚀 INICIANDO BOT DE CARGO AUTOMÁTICO")
-    print("=" * 60)
-    
     # Verificar token
     TOKEN = os.getenv('DISCORD_TOKEN')
     
     if not TOKEN:
-        print("❌ DISCORD_TOKEN não encontrado nas variáveis de ambiente!")
+        print("❌ DISCORD_TOKEN não encontrado!")
         print("💡 Configure no Render:")
-        print("   1. Vá em Environment")
-        print("   2. Adicione: DISCORD_TOKEN=seu_token_aqui")
-        print("   3. Clique em Save Changes")
-        print("💡 Ou adicione ao .env localmente:")
-        print("   DISCORD_TOKEN=seu_token_aqui")
+        print("   Environment → Add Environment Variable")
+        print("   Name: DISCORD_TOKEN")
+        print("   Value: seu_token_aqui")
         
-        # Para desenvolvimento local
+        # Tentar arquivo .env local
         try:
             from dotenv import load_dotenv
             load_dotenv()
             TOKEN = os.getenv('DISCORD_TOKEN')
             if TOKEN:
-                print("✅ Token encontrado no arquivo .env")
+                print("✅ Token encontrado no .env")
         except:
             pass
     
     if not TOKEN:
-        print("❌ ERRO: Token não encontrado!")
+        print("❌ ERRO: Token não configurado!")
         sys.exit(1)
     
-    print("✅ Token encontrado")
-    print("🖥️ Iniciando servidor web...")
-    
     # Iniciar servidor web
-    start_keep_alive()
+    start_web_server()
     
     # Iniciar bot
     try:
@@ -323,6 +291,7 @@ if __name__ == '__main__':
         bot.run(TOKEN)
     except discord.LoginFailure:
         print("❌ Token inválido!")
-        print("💡 Verifique se o token está correto")
+    except KeyboardInterrupt:
+        print("\n👋 Bot encerrado")
     except Exception as e:
         print(f"❌ Erro: {type(e).__name__}: {e}")
