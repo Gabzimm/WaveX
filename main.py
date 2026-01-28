@@ -13,7 +13,6 @@ import asyncio
 from threading import Thread
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
-import aiofiles
 
 # ========== CONFIGURAÇÃO DO BOT ==========
 print("=" * 60)
